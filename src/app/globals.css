@@ -3,7 +3,7 @@
 
 @theme {
   --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
 
@@ -41,8 +41,15 @@
 }
 
 @keyframes fade-in {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @layer base {
@@ -68,7 +75,29 @@
     --ring: #18181b;
     --radius: 0.75rem;
   }
-  
+
+  @keyframes blink {
+
+    0%,
+    49% {
+      opacity: 1;
+    }
+
+    50%,
+    100% {
+      opacity: 0;
+    }
+  }
+
+  .cursor {
+    display: inline-block;
+    width: 2px;
+    height: 1em;
+    margin-left: 4px;
+    background: currentColor;
+    animation: blink 1s step-start infinite;
+  }
+
   .dark {
     --background: #09090b;
     --foreground: #fafafa;
@@ -96,6 +125,7 @@
   * {
     border-color: var(--border);
   }
+
   body {
     background-color: var(--background);
     color: var(--foreground);

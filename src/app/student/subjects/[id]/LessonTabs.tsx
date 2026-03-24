@@ -2,9 +2,15 @@
 
 import { useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
-import { Disc, FileText, PlayCircle, Video } from 'lucide-react'
+import { Disc, FileText, PlayCircle, Video, CheckCircle2 } from 'lucide-react'
+import { QuizPanel } from './QuizPanel'
 
-export function LessonTabs({ title, items }: { title: string, items: any[] }) {
+export function LessonTabs({ title, items, quiz, existingAttempt }: { 
+  title: string, 
+  items: any[], 
+  quiz?: any,
+  existingAttempt?: any
+}) {
   const [activeType, setActiveType] = useState('video')
 
   const availableTypes = items.map(i => i.type)
@@ -42,35 +48,47 @@ export function LessonTabs({ title, items }: { title: string, items: any[] }) {
                <Disc className="h-4 w-4" /> Audio
              </button>
           )}
+          {quiz && (
+             <button onClick={() => setActiveType('quiz')} className={`px-4 py-1.5 text-sm font-medium rounded-full transition-colors flex items-center gap-2 ${activeType === 'quiz' ? 'bg-purple-500/20 text-purple-500 border border-purple-500/20' : 'bg-zinc-800 text-muted-foreground hover:bg-zinc-700 border border-transparent'}`}>
+               <CheckCircle2 className={`h-4 w-4 ${existingAttempt ? 'text-emerald-500 fill-emerald-500/10' : ''}`} /> Quiz
+               {existingAttempt && <span className="text-[10px] bg-emerald-500/20 px-1.5 py-0.5 rounded text-emerald-500 ml-1">{existingAttempt.score}%</span>}
+             </button>
+          )}
         </div>
       </div>
 
       <CardContent className="p-6">
-        {activeContent?.type === 'video' && activeContent.url && (
-           <div className="w-full overflow-hidden rounded-xl bg-black border border-border/50 aspect-video flex items-center justify-center group">
-               {activeContent.url.includes('youtube') || activeContent.url.includes('youtu.be') ? (
-                 <iframe className="w-full h-full" src={getEmbedUrl(activeContent.url)} allowFullScreen></iframe>
-               ) : (
-                 <div className="relative w-full h-full flex items-center justify-center">
-                    <PlayCircle className="h-16 w-16 text-white/50 group-hover:text-emerald-500 transition-all duration-300" />
+        {activeType === 'quiz' && quiz ? (
+          <QuizPanel quizId={quiz.id} questions={quiz.questions} existingAttempt={existingAttempt} />
+        ) : (
+          <>
+            {activeContent?.type === 'video' && activeContent.url && (
+               <div className="w-full overflow-hidden rounded-xl bg-black border border-border/50 aspect-video flex items-center justify-center group">
+                   {activeContent.url.includes('youtube') || activeContent.url.includes('youtu.be') ? (
+                     <iframe className="w-full h-full" src={getEmbedUrl(activeContent.url)} allowFullScreen></iframe>
+                   ) : (
+                     <div className="relative w-full h-full flex items-center justify-center">
+                        <PlayCircle className="h-16 w-16 text-white/50 group-hover:text-emerald-500 transition-all duration-300" />
+                     </div>
+                   )}
+               </div>
+            )}
+
+            {activeContent?.type === 'text' && (
+               <div className="prose prose-zinc dark:prose-invert max-w-none text-muted-foreground leading-relaxed text-[15px]">
+                  {activeContent.body || 'No text extracted for this module.'}
+               </div>
+            )}
+
+            {activeContent?.type === 'audio' && activeContent.url && (
+               <div className="flex flex-col gap-4">
+                 <div className="px-4 py-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-500 text-sm font-medium">
+                   🎧 AI Synthesized Lesson Audio
                  </div>
-               )}
-           </div>
-        )}
-
-        {activeContent?.type === 'text' && (
-           <div className="prose prose-zinc dark:prose-invert max-w-none text-muted-foreground leading-relaxed text-[15px]">
-              {activeContent.body || 'No text extracted for this module.'}
-           </div>
-        )}
-
-        {activeContent?.type === 'audio' && activeContent.url && (
-           <div className="flex flex-col gap-4">
-             <div className="px-4 py-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-500 text-sm font-medium">
-               🎧 AI Synthesized Lesson Audio
-             </div>
-             <audio controls className="w-full" src={activeContent.url} />
-           </div>
+                 <audio controls className="w-full" src={activeContent.url} />
+               </div>
+            )}
+          </>
         )}
       </CardContent>
     </Card>

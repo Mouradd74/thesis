@@ -28,7 +28,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
   }
 
   return (
-    <div className="flex min-h-screen bg-background text-foreground">
+    <div className="flex h-screen bg-background text-foreground overflow-hidden">
       {/* Sidebar */}
       <aside className="w-64 flex-shrink-0 border-r border-border/50 bg-zinc-950/30 flex flex-col">
         <div className="flex h-16 items-center px-6 border-b border-border/50">
