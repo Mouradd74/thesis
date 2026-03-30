@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { LearningStyleBadge } from '@/components/ui/LearningStyleBadge'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -21,9 +22,13 @@ export default async function StudentManagement() {
       id,
       motivation_score,
       attendance_rate,
+      student_id,
+      subject_id,
       profiles ( id, full_name ),
       subjects ( title )
     `)
+
+  const { data: styles } = await supabase.from('learning_style_profiles').select('*')
 
   return (
     <div className="animate-fade-in flex flex-col gap-8">
@@ -65,13 +70,18 @@ export default async function StudentManagement() {
       <div className="mt-4">
         <h2 className="text-xl font-semibold tracking-tight mb-4">Live Enrollments</h2>
         <div className="grid gap-4">
-          {enrollments?.map(e => (
+          {enrollments?.map(e => {
+            const styleProfile = styles?.find((s: any) => s.student_id === e.student_id && s.subject_id === e.subject_id)
+            return (
             <Card key={e.id} className="bg-zinc-950/40 border-white/5 py-2 px-1">
               <CardContent className="flex flex-col md:flex-row items-center justify-between gap-6 py-4">
-                <div className="flex flex-col gap-1 w-full md:w-auto">
-                  <h3 className="font-semibold tracking-tight text-foreground">
+                <div className="flex flex-col gap-2 w-full md:w-auto">
+                  <h3 className="font-semibold tracking-tight text-foreground flex items-center gap-2">
                     {/* @ts-ignore */}
                     Student #{e.profiles?.id?.substring(0,8) || ''}
+                    {styleProfile && (
+                       <LearningStyleBadge style={styleProfile.predicted_style as any} confidence={styleProfile.confidence} />
+                    )}
                   </h3>
                   {/* @ts-ignore */}
                   <span className="text-sm text-muted-foreground">Course: {e.subjects?.title}</span>
@@ -91,7 +101,7 @@ export default async function StudentManagement() {
                 </form>
               </CardContent>
             </Card>
-          ))}
+          )})}
           {(!enrollments || enrollments.length === 0) && (
              <div className="flex h-[150px] items-center justify-center rounded-xl border border-dashed border-border/50 bg-zinc-950/30">
                <p className="text-sm text-muted-foreground">No students actively enrolled in your subjects.</p>

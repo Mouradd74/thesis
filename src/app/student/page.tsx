@@ -1,7 +1,9 @@
 import { createClient } from '@/utils/supabase/server'
 import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { ArrowRight } from 'lucide-react'
+import { ArrowRight, Sparkles } from 'lucide-react'
+import { getLearningStyleProfile } from '@/app/student/learning-style/actions'
+import { LearningStyleBadge } from '@/components/ui/LearningStyleBadge'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -15,11 +17,30 @@ export default async function StudentDashboard() {
     .select('*')
     .order('created_at', { ascending: false })
 
+  const { data: { user } } = await supabase.auth.getUser()
+  const profile = user ? await getLearningStyleProfile(user.id) : null
+
   return (
     <div className="animate-fade-in flex flex-col gap-8">
       <div>
         <h1 className="text-3xl font-semibold tracking-tight">My Learning Hub</h1>
         <p className="mt-2 text-muted-foreground">Pick up where you left off and explore every adaptive module globally available.</p>
+        
+        {profile && profile.predicted_style !== 'undetermined' && (
+          <div className="mt-6 p-4 rounded-xl bg-gradient-to-r from-purple-500/10 to-emerald-500/10 border border-purple-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-emerald-400" />
+                Adaptive Learning Engine
+              </h3>
+              <p className="text-sm text-muted-foreground mt-1">Based on {profile.interaction_count} interactions across all your subjects, we've detected your optimal learning style.</p>
+            </div>
+            <div className="shrink-0 flex items-center gap-3 bg-zinc-950/50 p-2 rounded-xl border border-white/5">
+               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Your Profile</span>
+               <LearningStyleBadge style={profile.predicted_style as any} confidence={profile.confidence} />
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="mt-4">

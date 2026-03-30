@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from "react";
 
-export function useTyping(text, speed = 40, delay = 0) {
+export function useTyping(text: string, speed = 40, delay = 0) {
   const [displayed, setDisplayed] = useState("");
 
   useEffect(() => {

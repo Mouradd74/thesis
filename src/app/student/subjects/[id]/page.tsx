@@ -3,6 +3,9 @@ import { BookOpen, GraduationCap } from 'lucide-react'
 import { LessonTabs } from './LessonTabs'
 import { createExam } from '@/app/teacher/content/actions'
 import { ExamPanel } from './ExamPanel'
+import { getBanditRecommendation, getLearningStyleProfile } from '@/app/student/learning-style/actions'
+import { LearningStyleBadge } from '@/components/ui/LearningStyleBadge'
+
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -45,12 +48,25 @@ export default async function SubjectViewer(props: { params: Promise<{ id: strin
     return acc
   }, {})
 
+  // ML Platform: Fetch recommendations and profile
+  const recommendedType = user ? await getBanditRecommendation(user.id, subjectId) : 'video'
+  const profile = user ? await getLearningStyleProfile(user.id, subjectId) : null
+
+
   return (
     <div className="animate-fade-in flex flex-col gap-8 max-w-4xl mx-auto">
-      <header className="border-b border-border/40 pb-8 flext justify-between items-start">
+      <header className="border-b border-border/40 pb-8 flex justify-between items-start">
         <div>
           <h1 className="text-4xl font-bold tracking-tight text-foreground">{subject?.title}</h1>
           <p className="mt-4 text-lg text-muted-foreground leading-relaxed">{subject?.description}</p>
+        </div>
+        <div>
+          {profile && (
+            <div className="flex flex-col items-end gap-2">
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Your Style Profile</span>
+              <LearningStyleBadge style={profile.predicted_style as any} confidence={profile.confidence} />
+            </div>
+          )}
         </div>
       </header>
 
@@ -91,14 +107,20 @@ export default async function SubjectViewer(props: { params: Promise<{ id: strin
         {groupedLessons && Object.keys(groupedLessons).map((lessonTitle) => {
           const lessonQuiz = quizzes?.find(q => q.lesson_title === lessonTitle)
           const existingAttempt = quizAttempts?.find(a => a.quiz_id === lessonQuiz?.id)
+          // Extract the study guide text body to use as chatbot context
+          const textItem = groupedLessons[lessonTitle].find((i: any) => i.type === 'text')
+          const lessonContext = textItem?.body || ''
           
           return (
             <LessonTabs
               key={lessonTitle}
+              subjectId={subjectId}
               title={lessonTitle}
               items={groupedLessons[lessonTitle]}
               quiz={lessonQuiz}
               existingAttempt={existingAttempt}
+              recommendedType={recommendedType}
+              lessonContext={lessonContext}
             />
           )
         })}
