@@ -26,11 +26,20 @@ export function LessonTabs({ subjectId, title, items, quiz, existingAttempt, rec
 
   const activeContent = items.find(i => i.type === activeType) || items[0]
 
+  // Track the last content type the student viewed (for bandit reward)
+  const [lastViewedContentType, setLastViewedContentType] = useState<string>(
+    recommendedType && availableTypes.includes(recommendedType) ? recommendedType : 'video'
+  )
+
   // Track if we already logged the open event to avoid spamming
   const [loggedViews, setLoggedViews] = useState<Set<string>>(new Set())
 
   function handleTabChange(type: string) {
     setActiveType(type)
+    // Track last viewed content type for bandit reward (not quiz)
+    if (type !== 'quiz') {
+      setLastViewedContentType(type)
+    }
     if (type !== 'quiz' && !loggedViews.has(type)) {
       setLoggedViews(prev => new Set(prev).add(type))
       // It's technically reopening if we come back to it, but for simplicity we log 'content_open_type'
@@ -159,7 +168,7 @@ export function LessonTabs({ subjectId, title, items, quiz, existingAttempt, rec
 
       <CardContent className="p-6">
         {activeType === 'quiz' && quiz ? (
-          <QuizPanel subjectId={subjectId} quizId={quiz.id} questions={quiz.questions} existingAttempt={existingAttempt} />
+          <QuizPanel subjectId={subjectId} quizId={quiz.id} questions={quiz.questions} existingAttempt={existingAttempt} lastViewedContentType={lastViewedContentType} />
         ) : (
           <>
             {activeContent?.type === 'video' && activeContent.url && (

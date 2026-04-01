@@ -7,6 +7,8 @@ import { YoutubeTranscript } from 'youtube-transcript'
 import { MsEdgeTTS, OUTPUT_FORMAT } from 'msedge-tts'
 import * as crypto from 'crypto'
 import OpenAI from 'openai'
+import { updateMastery } from '@/lib/knowledgeTracing'
+import { updateAbility, selectOptimalQuestions } from '@/lib/irt'
 
 const openai = new OpenAI({
   apiKey: process.env.OPENROUTER_API_KEY,
@@ -117,7 +119,8 @@ ${studyGuide.slice(0, 6000)}`
       console.log(`[QuizGen] Attempt ${attempt + 1}: Found ${validQuestions.length} valid questions out of ${parsed.length}`)
 
       if (validQuestions.length >= 2) {
-        return validQuestions as QuizQuestion[]
+        // Assign default difficulty 0 for IRT
+        return validQuestions.map(q => ({ ...q, difficulty: 0.0 })) as QuizQuestion[];
       }
     } catch (e) {
       console.error(`[QuizGen] Attempt ${attempt + 1} Error:`, e)
@@ -321,6 +324,49 @@ export async function submitQuizAttempt(formData: FormData) {
 
   if (error) throw error
 
+  // BKT and IRT Updates 
+  try {
+    const { data: quizData } = await supabase.from('quizzes').select('subject_id, lesson_title, questions').eq('id', quizId).single()
+    if (quizData) {
+      const { subject_id, lesson_title, questions } = quizData
+      
+      // 1. Fetch current Ability (IRT)
+      let { data: abilityData } = await supabase.from('student_abilities').select('ability_theta').eq('student_id', user.id).eq('subject_id', subject_id).maybeSingle()
+      let currentTheta = abilityData?.ability_theta || 0.0;
+      
+      // 2. Fetch current Mastery (BKT)
+      let { data: masteryData } = await supabase.from('knowledge_states').select('p_mastery, attempts_count').eq('student_id', user.id).eq('subject_id', subject_id).eq('concept', lesson_title).maybeSingle()
+      let currentMastery = masteryData?.p_mastery || 0.1;
+      let attemptsCount = masteryData?.attempts_count || 0;
+
+      // 3. Process each question
+      questions.forEach((q: any, idx: number) => {
+        const isCorrect = answers[idx] === q.answer;
+        currentTheta = updateAbility(currentTheta, q.difficulty || 0.0, isCorrect);
+        currentMastery = updateMastery(currentMastery, isCorrect);
+      });
+
+      // 4. Save Updates
+      await supabase.from('student_abilities').upsert({
+        student_id: user.id,
+        subject_id: subject_id,
+        ability_theta: currentTheta,
+        last_updated: new Date().toISOString()
+      }, { onConflict: 'student_id, subject_id' });
+
+      await supabase.from('knowledge_states').upsert({
+        student_id: user.id,
+        subject_id: subject_id,
+        concept: lesson_title,
+        p_mastery: currentMastery,
+        attempts_count: attemptsCount + 1,
+        last_updated: new Date().toISOString()
+      }, { onConflict: 'student_id, subject_id, concept' });
+    }
+  } catch (err) {
+    console.error('Failed to update adaptive models:', err);
+  }
+
   return { success: true }
 }
 
@@ -400,10 +446,14 @@ export async function createExam(subjectId: string) {
     examQuestions = [...examQuestions, ...uniquePadding.slice(0, remaining)]
   }
 
-  // Shuffle and slice to exactly 8
-  const finalQuestions = examQuestions
-    .sort(() => Math.random() - 0.5)
-    .slice(0, 8)
+  // IRT Selection instead of purely random
+  let { data: abilityData } = await supabase.from('student_abilities').select('ability_theta').eq('student_id', user.id).eq('subject_id', subjectId).maybeSingle()
+  let currentTheta = abilityData?.ability_theta || 0.0;
+
+  // Use selectOptimalQuestions to find questions matching student's ability level (which maximizes information gain)
+  // Default difficulty to 0.0 if missing
+  const questionsWithDifficulty = examQuestions.map(q => ({ ...q, difficulty: q.difficulty || 0.0 }));
+  const finalQuestions = selectOptimalQuestions(currentTheta, questionsWithDifficulty, 8);
 
   if (finalQuestions.length < 1) return null
 

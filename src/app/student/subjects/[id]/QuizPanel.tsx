@@ -15,6 +15,7 @@ interface QuizPanelProps {
   subjectId: string
   quizId: string
   questions: Question[]
+  lastViewedContentType?: string
   existingAttempt?: {
     answers: Record<number, string>
     score: number
@@ -22,7 +23,7 @@ interface QuizPanelProps {
   }
 }
 
-export function QuizPanel({ subjectId, quizId, questions, existingAttempt }: QuizPanelProps) {
+export function QuizPanel({ subjectId, quizId, questions, existingAttempt, lastViewedContentType }: QuizPanelProps) {
   const [answers, setAnswers] = useState<Record<number, string>>({})
   const [hintsUsed, setHintsUsed] = useState<Record<number, number>>({})
   const [submitted, setSubmitted] = useState(false)
@@ -44,15 +45,21 @@ export function QuizPanel({ subjectId, quizId, questions, existingAttempt }: Qui
     setAnswers(prev => ({ ...prev, [qIdx]: option }))
   }
 
-  const handleUseHint = (qIdx: number) => {
+  const handleUseHint = async (qIdx: number) => {
     if (submitted) return
-    setHintsUsed(prev => {
-      const current = prev[qIdx] || 0
-      if (current >= 2) return prev
-      if (current === 0) logInteraction(subjectId, 'hint_used_level_1', 'general')
-      if (current === 1) logInteraction(subjectId, 'hint_used_level_2', 'general')
-      return { ...prev, [qIdx]: current + 1 }
-    })
+
+    const currentCount = hintsUsed[qIdx] || 0
+    if (currentCount >= 2) return
+
+    setHintsUsed(prev => ({ ...prev, [qIdx]: currentCount + 1 }))
+
+    // Log interaction concurrently but isolated from pure state updater
+    try {
+      if (currentCount === 0) await logInteraction(subjectId, 'hint_used_level_1', 'general')
+      if (currentCount === 1) await logInteraction(subjectId, 'hint_used_level_2', 'general')
+    } catch (err) {
+      console.error("Failed to log hint usage", err)
+    }
   }
 
   const handleSubmit = async () => {
@@ -94,6 +101,11 @@ export function QuizPanel({ subjectId, quizId, questions, existingAttempt }: Qui
       }
 
       setSubmitted(true)
+
+      // Bandit Reward: record which content type the student consumed and their quiz score
+      if (lastViewedContentType && ['video', 'audio', 'text'].includes(lastViewedContentType)) {
+        recordBanditReward(subjectId, lastViewedContentType as 'video' | 'audio' | 'text', finalScore)
+      }
     } catch (err) {
       console.error('Failed to submit quiz:', err)
       alert('Error saving your result. Please try again.')

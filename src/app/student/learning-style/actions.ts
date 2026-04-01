@@ -146,8 +146,10 @@ export async function getBanditRecommendation(studentId: string, subjectId: stri
   return selectBanditArm((arms || []) as BanditArm[])
 }
 
-export async function recordBanditReward(studentId: string, subjectId: string, contentType: ContentType, score: number) {
+export async function recordBanditReward(subjectId: string, contentType: ContentType, score: number) {
   const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return
   
   // Reward if score is >= 70
   const isWin = score >= 70 ? 1 : 0
@@ -156,7 +158,7 @@ export async function recordBanditReward(studentId: string, subjectId: string, c
   const { data: arm } = await supabase
     .from('bandit_arms')
     .select('*')
-    .eq('student_id', studentId)
+    .eq('student_id', user.id)
     .eq('subject_id', subjectId)
     .eq('content_type', contentType)
     .maybeSingle()
@@ -164,7 +166,7 @@ export async function recordBanditReward(studentId: string, subjectId: string, c
   await supabase
     .from('bandit_arms')
     .upsert({
-      student_id: studentId,
+      student_id: user.id,
       subject_id: subjectId,
       content_type: contentType,
       trials: (arm?.trials || 0) + 1,
