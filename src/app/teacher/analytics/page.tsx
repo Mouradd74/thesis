@@ -1,6 +1,7 @@
 import { createClient } from '@/utils/supabase/server'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { clusterStudents } from '@/lib/mlClient'
+import Link from 'next/link'
 
 export const dynamic = 'force-dynamic'
 
@@ -8,7 +9,7 @@ export default async function AnalyticsPage() {
   const supabase = await createClient()
 
   // 1. Fetch data from Supabase
-  const { data: students } = await supabase.from('profiles').select('id').eq('role', 'student')
+  const { data: students } = await supabase.from('profiles').select('id, full_name').eq('role', 'student')
   const { data: interactions } = await supabase.from('student_interactions').select('*')
   const { data: quizzes } = await supabase.from('quiz_attempts').select('*')
 
@@ -71,6 +72,11 @@ export default async function AnalyticsPage() {
     }
   }
 
+  const studentMap: Record<string, string> = {}
+  if (students) {
+    students.forEach(s => studentMap[s.id] = s.full_name || `Student #${s.id.substring(0,8)}`)
+  }
+
   return (
     <div className="animate-fade-in flex flex-col gap-8">
       <div>
@@ -114,17 +120,30 @@ export default async function AnalyticsPage() {
                 <div className="text-sm text-muted-foreground space-y-2">
                   <p>Students in this cluster dynamically adapt based on behavioral features like content preference and interaction rates.</p>
                   <div className="pt-4 border-t border-border/20 mt-4">
-                    <p className="text-xs font-semibold mb-2 text-primary">Student IDs:</p>
-                    <div className="flex flex-wrap gap-2">
+                    <p className="text-xs font-semibold mb-2 text-primary">Students:</p>
+                    <div className="flex flex-wrap gap-2 items-start">
                       {cluster.students.slice(0, 5).map((id: string) => (
-                        <span key={id} className="text-[10px] font-mono bg-zinc-900 px-2 py-1 rounded text-zinc-500">
-                          {id.split('-')[0]}...
-                        </span>
+                        <Link href={`/teacher/students/${id}`} key={id}>
+                          <span className="inline-flex text-[11px] font-medium bg-zinc-900 hover:bg-zinc-800 hover:text-foreground transition-colors px-2.5 py-1 rounded-md text-zinc-300 cursor-pointer border border-white/5">
+                            {studentMap[id] || `User ${id.substring(0,4)}`}
+                          </span>
+                        </Link>
                       ))}
                       {cluster.students.length > 5 && (
-                        <span className="text-[10px] bg-zinc-900 px-2 py-1 rounded text-zinc-500">
-                          +{cluster.students.length - 5} more
-                        </span>
+                        <details className="group relative list-none [&::-webkit-details-marker]:hidden">
+                          <summary className="inline-flex text-[11px] bg-zinc-900/50 hover:bg-zinc-800 px-2.5 py-1 rounded-md text-zinc-400 border border-transparent cursor-pointer transition-colors outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50">
+                            +{cluster.students.length - 5} more
+                          </summary>
+                          <div className="flex flex-wrap gap-2 mt-2 p-3 bg-zinc-950/80 border border-white/10 rounded-lg w-full min-w-[200px] animate-in fade-in slide-in-from-top-2">
+                            {cluster.students.slice(5).map((id: string) => (
+                              <Link href={`/teacher/students/${id}`} key={id}>
+                                <span className="inline-flex text-[11px] font-medium bg-zinc-900 hover:bg-zinc-800 hover:text-foreground transition-colors px-2.5 py-1 rounded-md text-zinc-300 cursor-pointer border border-white/5">
+                                  {studentMap[id] || `User ${id.substring(0,4)}`}
+                                </span>
+                              </Link>
+                            ))}
+                          </div>
+                        </details>
                       )}
                     </div>
                   </div>

@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
-import { BookA, CheckSquare, LogOut, Layers } from 'lucide-react'
+import { BookA, CheckSquare, LogOut, Layers, ListTodo } from 'lucide-react'
 
 export default async function StudentLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
@@ -37,7 +37,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
             <span>EduPlatform</span>
           </Link>
         </div>
-        
+
         <div className="flex-1 overflow-y-auto py-6 px-4">
           <div className="mb-6 px-2">
             <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-4">Student Portal</p>
@@ -49,6 +49,10 @@ export default async function StudentLayout({ children }: { children: React.Reac
               <Link href="/student/assignments" className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-zinc-900/50 hover:text-foreground transition-colors">
                 <CheckSquare className="h-4 w-4" />
                 Assignments
+              </Link>
+              <Link href="/student/todo" className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-zinc-900/50 hover:text-foreground transition-colors">
+                <ListTodo className="h-4 w-4" />
+                To-Do-List
               </Link>
             </nav>
           </div>

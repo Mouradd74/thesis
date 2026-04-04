@@ -48,7 +48,7 @@ export default async function StudentManagement() {
               <div className="space-y-2">
                 <Label htmlFor="student_id">Select Student</Label>
                 <select id="student_id" name="student_id" required className="flex h-10 w-full rounded-xl border border-input bg-zinc-900 px-3 py-2 text-sm text-foreground ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 transition-shadow">
-                  {allStudents?.map(s => <option key={s.id} value={s.id}>Student #{s.id.substring(0,8)}</option>)}
+                  {allStudents?.map(s => <option key={s.id} value={s.id}>{s.full_name || `Student #${s.id.substring(0,8)}`}</option>)}
                 </select>
               </div>
               <div className="space-y-2">
@@ -78,7 +78,7 @@ export default async function StudentManagement() {
                 <div className="flex flex-col gap-2 w-full md:w-auto">
                   <h3 className="font-semibold tracking-tight text-foreground flex items-center gap-2">
                     {/* @ts-ignore */}
-                    Student #{e.profiles?.id?.substring(0,8) || ''}
+                    {e.profiles?.full_name || `Student #${e.profiles?.id?.substring(0,8) || ''}`}
                     {styleProfile && (
                        <LearningStyleBadge style={styleProfile.predicted_style as any} confidence={styleProfile.confidence} />
                     )}

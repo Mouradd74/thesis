@@ -25,7 +25,11 @@ export async function signup(formData: FormData) {
 
   if (authData?.user) {
     const { error: profileError } = await supabase.from('profiles').insert([
-      { id: authData.user.id, role: formData.get('role') as string }
+      { 
+        id: authData.user.id, 
+        role: formData.get('role') as string,
+        full_name: formData.get('full_name') as string
+      }
     ])
     if (profileError) {
       return redirect(`/signup?error=${encodeURIComponent('Profile Error: ' + profileError.message)}`)
