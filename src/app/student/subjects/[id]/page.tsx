@@ -50,8 +50,19 @@ export default async function SubjectViewer(props: { params: Promise<{ id: strin
   }, {})
 
   // ML Platform: Fetch recommendations and profile
-  const recommendedType = user ? await getBanditRecommendation(user.id, subjectId) : 'video'
   const profile = user ? await getLearningStyleProfile(user.id, subjectId) : null
+  
+  let recommendedType = 'video'
+  if (profile?.predicted_style) {
+    if (profile.predicted_style === 'visual') recommendedType = 'video'
+    else if (profile.predicted_style === 'auditory') recommendedType = 'audio'
+    else if (profile.predicted_style === 'reading') recommendedType = 'text'
+    else if (profile.predicted_style === 'undetermined' && user) {
+      recommendedType = await getBanditRecommendation(user.id, subjectId)
+    }
+  } else if (user) {
+    recommendedType = await getBanditRecommendation(user.id, subjectId)
+  }
 
   // BKT Mastery from Supabase
   const { data: bktStates } = user
