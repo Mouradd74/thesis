@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Sparkles } from 'lucide-react'
+import Link from 'next/link'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -127,8 +128,8 @@ export default async function ContentManagement() {
       <div className="mt-8">
         <h2 className="text-xl font-semibold tracking-tight mb-4">Active Subjects</h2>
         <div className="flex flex-col gap-3">
-          {subjects?.map(s => (
-            <div key={s.id} className="flex items-center justify-between rounded-xl border border-white/5 bg-zinc-950/40 p-4 transition-colors hover:bg-zinc-900/50">
+          {subjects?.map((s: any) => (
+            <Link key={s.id} href={`/teacher/content/${s.id}`} className="flex items-center justify-between rounded-xl border border-white/5 bg-zinc-950/40 p-4 transition-colors hover:bg-zinc-900/50">
               <div className="flex flex-col gap-1">
                 <span className="font-medium">{s.title}</span>
                 <span className="text-sm text-muted-foreground">{s.description}</span>
@@ -137,7 +138,7 @@ export default async function ContentManagement() {
                 <span className="inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
                 <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Live</span>
               </div>
-            </div>
+            </Link>
           ))}
           {(!subjects || subjects.length === 0) && (
             <div className="flex h-[100px] items-center justify-center rounded-xl border border-dashed border-border/50 bg-zinc-950/30">

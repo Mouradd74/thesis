@@ -2,6 +2,7 @@
 
 import { createClient } from '@/utils/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { redirect } from 'next/navigation'
 import { YoutubeTranscript } from 'youtube-transcript'
 // @ts-ignore
 import { MsEdgeTTS, OUTPUT_FORMAT } from 'msedge-tts'
@@ -159,6 +160,57 @@ export async function createContent(formData: FormData) {
 
   revalidatePath('/teacher/content')
   if (subjectId) revalidatePath(`/student/subjects/${subjectId}`)
+  if (subjectId) revalidatePath(`/teacher/content/${subjectId}`)
+}
+
+export async function updateSubject(formData: FormData) {
+  const supabase = await createClient()
+  const subjectId = formData.get('subject_id') as string
+
+  await supabase.from('subjects').update({
+    title: formData.get('title') as string,
+    description: formData.get('description') as string,
+  }).eq('id', subjectId)
+
+  revalidatePath('/teacher/content')
+  revalidatePath(`/teacher/content/${subjectId}`)
+  revalidatePath(`/student/subjects/${subjectId}`)
+}
+
+export async function deleteSubject(formData: FormData) {
+  const supabase = await createClient()
+  const subjectId = formData.get('subject_id') as string
+
+  await supabase.from('subjects').delete().eq('id', subjectId)
+
+  revalidatePath('/teacher/content')
+  redirect('/teacher/content')
+}
+
+export async function updateContent(formData: FormData) {
+  const supabase = await createClient()
+  const contentId = formData.get('content_id') as string
+  const subjectId = formData.get('subject_id') as string
+
+  await supabase.from('content').update({
+    title: formData.get('title') as string,
+    url: (formData.get('url') as string) || null,
+    body: (formData.get('body') as string) || null,
+  }).eq('id', contentId)
+
+  revalidatePath(`/teacher/content/${subjectId}`)
+  revalidatePath(`/student/subjects/${subjectId}`)
+}
+
+export async function deleteContent(formData: FormData) {
+  const supabase = await createClient()
+  const contentId = formData.get('content_id') as string
+  const subjectId = formData.get('subject_id') as string
+
+  await supabase.from('content').delete().eq('id', contentId)
+
+  revalidatePath(`/teacher/content/${subjectId}`)
+  revalidatePath(`/student/subjects/${subjectId}`)
 }
 
 export async function ingestYouTubeVideo(formData: FormData) {
