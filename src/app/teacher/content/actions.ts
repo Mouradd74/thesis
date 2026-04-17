@@ -279,13 +279,44 @@ export async function ingestYouTubeVideo(formData: FormData) {
       console.warn('Study guide generation failed, remains raw transcript.')
     }
 
+    // -------- Neural TTS Script Generation --------
+    let audioScript = studyGuide
+    try {
+      const scriptRes = await openai.chat.completions.create({
+        model: 'openrouter/auto',
+        messages: [
+          {
+            role: 'user',
+            content: `You are an engaging, energetic educational podcast host. Take the following study guide and rewrite it into a short, conversational, and highly engaging script meant to be read ALOUD. 
+            
+            STRICT REQUIREMENTS:
+            1. DO NOT use any markdown, bullet points, asterisks, hashtags, or symbols. 
+            2. Spell out acronyms and numbers clearly.
+            3. Use transitional phrases (e.g., "Now, let's talk about...", "The really fascinating part is...").
+            4. Keep it relatively short (under 400 words) but cover the core concepts.
+            5. Start directly with the script, no intros or outtros acknowledging the prompt.
+            
+            STUDY GUIDE:
+            ${studyGuide.slice(0, 5000)}`
+          }
+        ]
+      })
+      if (scriptRes.choices[0].message.content) {
+        audioScript = scriptRes.choices[0].message.content
+      }
+    } catch (e) {
+      console.warn('Audio script generation failed, falling back to stripping markdown manually.')
+      audioScript = audioScript.replace(/[#*`_\[\]]/g, '').replace(/-/g, ' ')
+    }
+
     // -------- Simple TTS (No Fluff) --------
     try {
-      console.log(`[TTS] Generating audio from study guide (${studyGuide.length} chars)`)
+      console.log(`[TTS] Generating audio from study guide (${audioScript.length} chars)`)
       const tts = new MsEdgeTTS()
-      await tts.setMetadata('en-US-AriaNeural', OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3)
+      // Changed to a more authoritative, conversational voice
+      await tts.setMetadata('en-US-ChristopherNeural', OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3)
 
-      const { audioStream } = tts.toStream(studyGuide.slice(0, 4000)) // Limit to 4k chars for safety
+      const { audioStream } = tts.toStream(audioScript.slice(0, 4000)) // Limit to 4k chars for safety
       const chunks: Buffer[] = []
       await new Promise((res, rej) => {
         const timeout = setTimeout(() => rej(new Error('TTS Timeout')), 30000)

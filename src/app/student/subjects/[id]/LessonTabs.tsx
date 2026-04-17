@@ -7,6 +7,7 @@ import { QuizPanel } from './QuizPanel'
 import { LessonChat } from './LessonChat'
 import { logInteraction } from '@/app/student/learning-style/actions'
 import { EventType } from '@/lib/naiveBayes'
+import ReactMarkdown from 'react-markdown'
 
 export function LessonTabs({ subjectId, title, items, quiz, existingAttempt, recommendedType, lessonContext }: { 
   subjectId: string,
@@ -184,8 +185,10 @@ export function LessonTabs({ subjectId, title, items, quiz, existingAttempt, rec
             )}
 
             {activeContent?.type === 'text' && (
-               <div className="prose prose-zinc dark:prose-invert max-w-none text-muted-foreground leading-relaxed text-[15px]">
-                  {activeContent.body || 'No text extracted for this module.'}
+               <div className="prose prose-zinc dark:prose-invert prose-headings:text-foreground prose-a:text-blue-500 prose-code:text-emerald-500 prose-code:bg-emerald-500/10 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-md max-w-none text-muted-foreground leading-relaxed text-[15px]">
+                  <ReactMarkdown>
+                    {activeContent.body || 'No text extracted for this module.'}
+                  </ReactMarkdown>
                </div>
             )}
 
