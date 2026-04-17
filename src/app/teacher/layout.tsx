@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
-import { LayoutDashboard, Users, BookOpen, LogOut, Layers, Activity } from 'lucide-react'
+import { LayoutDashboard, Users, BookOpen, LogOut, Layers, Activity, Target } from 'lucide-react'
 
 export default async function TeacherLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
@@ -53,6 +53,10 @@ export default async function TeacherLayout({ children }: { children: React.Reac
               <Link href="/teacher/content" className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-zinc-900/50 hover:text-foreground transition-colors">
                 <BookOpen className="h-4 w-4" />
                 Curriculum
+              </Link>
+              <Link href="/teacher/content/quiz-builder" className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground pl-8 hover:bg-zinc-900/50 hover:text-foreground transition-colors">
+                <Target className="h-4 w-4" />
+                Quiz Builder
               </Link>
               <Link href="/teacher/analytics" className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-zinc-900/50 hover:text-foreground transition-colors">
                 <Activity className="h-4 w-4" />
