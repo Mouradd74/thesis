@@ -62,3 +62,96 @@ export function selectOptimalQuestions<T extends IRTQuestion>(
 
   return sorted.slice(0, count);
 }
+
+// ============================================================
+// Computerized Adaptive Testing (CAT) Extensions
+// ============================================================
+
+/**
+ * Fisher Information for a single item at a given theta.
+ * I(θ) = P(θ) * Q(θ) where P = prob correct, Q = 1 - P
+ * Maximum information occurs when P(θ) = 0.5, i.e., when θ = b.
+ */
+export function fisherInformation(theta: number, b: number): number {
+  const p = calculateProbability(theta, b);
+  return p * (1 - p);
+}
+
+/**
+ * Calculates the Standard Error of the ability estimate.
+ * SE(θ) = 1 / sqrt(Σ I(θ, b_i)) for all answered questions.
+ * Lower SE = more precise estimate = exam can stop.
+ */
+export function calculateStandardError(
+  theta: number,
+  answeredDifficulties: number[]
+): number {
+  if (answeredDifficulties.length === 0) return Infinity;
+
+  const totalInformation = answeredDifficulties.reduce(
+    (sum, b) => sum + fisherInformation(theta, b),
+    0
+  );
+
+  if (totalInformation <= 0) return Infinity;
+  return 1 / Math.sqrt(totalInformation);
+}
+
+export interface CATQuestion {
+  question: string;
+  options: string[];
+  answer: string;
+  hints?: string[];
+  difficulty: number;
+  bank_index: number; // Position in the item bank for tracking
+}
+
+export interface CATResponse {
+  bank_index: number;
+  answer: string;
+  correct: boolean;
+  theta_after: number;
+  se_after: number;
+}
+
+/**
+ * Selects the single best next question for a CAT session.
+ * Picks the unanswered question that maximizes Fisher Information at the current θ.
+ */
+export function selectNextCATQuestion(
+  theta: number,
+  itemBank: CATQuestion[],
+  answeredIndices: Set<number>
+): CATQuestion | null {
+  const remaining = itemBank.filter(q => !answeredIndices.has(q.bank_index));
+  if (remaining.length === 0) return null;
+
+  // Sort by Fisher Information descending (most informative first)
+  remaining.sort((a, b) => {
+    const infoA = fisherInformation(theta, a.difficulty);
+    const infoB = fisherInformation(theta, b.difficulty);
+    return infoB - infoA;
+  });
+
+  return remaining[0];
+}
+
+/** CAT convergence threshold — exam stops when SE drops below this */
+export const CAT_SE_THRESHOLD = 0.3;
+
+/** Maximum number of questions in a CAT session */
+export const CAT_MAX_QUESTIONS = 15;
+
+/** Minimum number of questions before allowing convergence */
+export const CAT_MIN_QUESTIONS = 5;
+
+/**
+ * Maps a theta value to a human-readable ability label.
+ */
+export function getAbilityLabel(theta: number): { label: string; color: string } {
+  if (theta >= 2.0) return { label: 'Expert', color: 'emerald' };
+  if (theta >= 1.0) return { label: 'Advanced', color: 'blue' };
+  if (theta >= 0.0) return { label: 'Proficient', color: 'cyan' };
+  if (theta >= -1.0) return { label: 'Developing', color: 'amber' };
+  return { label: 'Novice', color: 'red' };
+}

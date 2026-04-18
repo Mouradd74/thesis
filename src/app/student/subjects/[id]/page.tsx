@@ -3,6 +3,7 @@ import { BookOpen, GraduationCap, Brain, BarChart3 } from 'lucide-react'
 import { LessonTabs } from './LessonTabs'
 import { createExam } from '@/app/teacher/content/actions'
 import { ExamPanel } from './ExamPanel'
+import { AdaptiveExamPanel } from './AdaptiveExamPanel'
 import { getBanditRecommendation, getLearningStyleProfile } from '@/app/student/learning-style/actions'
 import { LearningStyleBadge } from '@/components/ui/LearningStyleBadge'
 import { predictMastery, checkMLHealth } from '@/lib/mlClient'
@@ -39,6 +40,8 @@ export default async function SubjectViewer(props: { params: Promise<{ id: strin
   const { data: examData } = examId
     ? await supabase.from('exams').select('*').eq('id', examId).single()
     : { data: null }
+
+  const isAdaptiveExam = examData?.is_adaptive === true
 
   // Group content sequentially by title (Lessons)
   const groupedLessons = contentList?.reduce((acc: any, content: any) => {
@@ -198,8 +201,8 @@ export default async function SubjectViewer(props: { params: Promise<{ id: strin
               <GraduationCap className="h-8 w-8 text-purple-400" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-foreground">Personalized Subject Exam</h2>
-              <p className="text-sm text-muted-foreground">Master your weak spots with questions tailored to your previous quiz errors.</p>
+              <h2 className="text-2xl font-bold text-foreground">Adaptive Ability Assessment</h2>
+              <p className="text-sm text-muted-foreground">IRT-powered Computerized Adaptive Test — difficulty adjusts to your ability in real-time.</p>
             </div>
           </div>
 
@@ -211,10 +214,12 @@ export default async function SubjectViewer(props: { params: Promise<{ id: strin
                 ))}
               </div>
               <p className="text-muted-foreground font-medium">
-                Complete <span className="text-foreground">{Math.max(0, 3 - uniqueQuizzesAttempted)}</span> more lesson quizzes to unlock your personalized exam.
+                Complete <span className="text-foreground">{Math.max(0, 3 - uniqueQuizzesAttempted)}</span> more lesson quizzes to unlock the adaptive exam.
               </p>
               <p className="text-xs text-zinc-600">({uniqueQuizzesAttempted}/3 Quizzes Finished)</p>
             </div>
+          ) : isAdaptiveExam ? (
+            <AdaptiveExamPanel examId={examData.id} initialTheta={examData.initial_theta || 0} />
           ) : (
             <ExamPanel examId={examData.id} questions={examData.questions} />
           )}

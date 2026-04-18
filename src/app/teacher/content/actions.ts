@@ -9,7 +9,7 @@ import { MsEdgeTTS, OUTPUT_FORMAT } from 'msedge-tts'
 import * as crypto from 'crypto'
 import OpenAI from 'openai'
 import { updateMastery } from '@/lib/knowledgeTracing'
-import { updateAbility, selectOptimalQuestions } from '@/lib/irt'
+import { updateAbility, selectOptimalQuestions, calculateStandardError, selectNextCATQuestion, CAT_SE_THRESHOLD, CAT_MAX_QUESTIONS, CAT_MIN_QUESTIONS, CATQuestion, CATResponse } from '@/lib/irt'
 
 const openai = new OpenAI({
   apiKey: process.env.OPENROUTER_API_KEY,
@@ -481,8 +481,13 @@ export async function createExam(subjectId: string) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Unauthorized')
 
-  // Check if exam already exists
-  const { data: existingExam } = await supabase.from('exams').select('id').eq('student_id', user.id).eq('subject_id', subjectId).maybeSingle()
+  // Check if an adaptive exam already exists for this student+subject
+  const { data: existingExam } = await supabase
+    .from('exams')
+    .select('id, is_adaptive, completed_at')
+    .eq('student_id', user.id)
+    .eq('subject_id', subjectId)
+    .maybeSingle()
   if (existingExam) return existingExam.id
 
   // Fetch all quiz attempts for this subject
@@ -495,57 +500,287 @@ export async function createExam(subjectId: string) {
   if (fetchError) throw fetchError
   if (!attempts || attempts.length < 3) return null
 
-  const wrongPool: any[] = []
-  const hintPool: any[] = [] // Correct but used both hints
-  const paddingPool: any[] = []
+  // Build the full item bank from all quiz questions
+  const allQuestions: any[] = []
+  const seenQuestions = new Set<string>()
 
   attempts.forEach(attempt => {
     const questions = (attempt.quizzes as any).questions
-    const answers = attempt.answers
-    const hintsUsed = (attempt as any).hints_used || {}
-    
-    questions.forEach((q: any, idx: number) => {
-      if (answers[idx] !== q.answer) {
-        wrongPool.push(q)
-      } else if (hintsUsed[idx] === 2) {
-        hintPool.push(q)
-      } else {
-        paddingPool.push(q)
+    questions.forEach((q: any) => {
+      if (!seenQuestions.has(q.question)) {
+        seenQuestions.add(q.question)
+        allQuestions.push(q)
       }
     })
   })
 
-  // Deduplicate by question text
-  const uniqueWrong = Array.from(new Map(wrongPool.map(q => [q.question, q])).values())
-  const uniqueHinted = Array.from(new Map(hintPool.map(q => [q.question, q])).values())
-    .filter(hq => !uniqueWrong.some(wq => wq.question === hq.question))
-  const uniquePadding = Array.from(new Map(paddingPool.map(q => [q.question, q])).values())
-    .filter(pq => !uniqueWrong.some(wq => wq.question === pq.question) && !uniqueHinted.some(hq => hq.question === pq.question))
+  if (allQuestions.length < 5) return null
 
-  let examQuestions = [...uniqueWrong, ...uniqueHinted]
-  
-  if (examQuestions.length < 8) {
-    const remaining = 8 - examQuestions.length
-    examQuestions = [...examQuestions, ...uniquePadding.slice(0, remaining)]
+  // LLM Difficulty Recalibration for items missing proper difficulty
+  const needsCalibration = allQuestions.filter(q => !q.difficulty || q.difficulty === 0.0)
+  if (needsCalibration.length > 0 && process.env.OPENROUTER_API_KEY) {
+    try {
+      const batch = needsCalibration.slice(0, 20) // Limit batch size
+      const questionsText = batch.map((q, i) => `${i + 1}. ${q.question}`).join('\n')
+
+      const res = await openai.chat.completions.create({
+        model: 'openrouter/auto',
+        messages: [{
+          role: 'user',
+          content: `You are an IRT psychometrician. Estimate the difficulty of each question on a Rasch IRT scale from -3.0 (trivial) to +3.0 (extremely hard). Return ONLY a JSON array of numbers, one per question, in the same order.
+
+Example response: [-1.2, 0.5, 1.8, -0.3]
+
+Questions:
+${questionsText}`
+        }]
+      })
+
+      const content = res.choices[0].message.content?.trim() || ''
+      // Extract JSON array from response
+      const match = content.match(/\[([\s\S]*?)\]/)
+      if (match) {
+        const difficulties: number[] = JSON.parse(`[${match[1]}]`)
+        batch.forEach((q, i) => {
+          if (difficulties[i] !== undefined && !isNaN(difficulties[i])) {
+            q.difficulty = Math.max(-3.0, Math.min(3.0, difficulties[i]))
+          }
+        })
+      }
+    } catch (e) {
+      console.warn('[CAT] LLM difficulty calibration failed, using defaults')
+    }
   }
 
-  // IRT Selection instead of purely random
-  let { data: abilityData } = await supabase.from('student_abilities').select('ability_theta').eq('student_id', user.id).eq('subject_id', subjectId).maybeSingle()
-  let currentTheta = abilityData?.ability_theta || 0.0;
+  // Build final item bank with bank_index for tracking
+  const itemBank: CATQuestion[] = allQuestions.map((q, idx) => ({
+    question: q.question,
+    options: q.options,
+    answer: q.answer,
+    hints: q.hints || [],
+    difficulty: q.difficulty || 0.0,
+    bank_index: idx
+  }))
 
-  // Use selectOptimalQuestions to find questions matching student's ability level (which maximizes information gain)
-  // Default difficulty to 0.0 if missing
-  const questionsWithDifficulty = examQuestions.map(q => ({ ...q, difficulty: q.difficulty || 0.0 }));
-  const finalQuestions = selectOptimalQuestions(currentTheta, questionsWithDifficulty, 8);
+  // Get current theta as starting point
+  const { data: abilityData } = await supabase
+    .from('student_abilities')
+    .select('ability_theta')
+    .eq('student_id', user.id)
+    .eq('subject_id', subjectId)
+    .maybeSingle()
+  const initialTheta = abilityData?.ability_theta || 0.0
 
-  if (finalQuestions.length < 1) return null
-
+  // Create the adaptive exam
   const { data: newExam, error: insertError } = await supabase.from('exams').insert({
     student_id: user.id,
     subject_id: subjectId,
-    questions: finalQuestions
+    questions: [], // Legacy field — kept empty for adaptive exams
+    item_bank: itemBank,
+    initial_theta: initialTheta,
+    is_adaptive: true,
+    cat_responses: []
   }).select().single()
 
   if (insertError) throw insertError
   return newExam.id
+}
+
+/**
+ * Get the next question for a CAT session, or signal that the exam is complete.
+ * Called by the client after each answer to get the adaptively-selected next question.
+ */
+export async function getNextCATQuestion(examId: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Unauthorized')
+
+  const { data: exam } = await supabase
+    .from('exams')
+    .select('*')
+    .eq('id', examId)
+    .eq('student_id', user.id)
+    .single()
+
+  if (!exam) throw new Error('Exam not found')
+
+  // If already completed, return the final results
+  if (exam.completed_at) {
+    return {
+      finished: true,
+      finalTheta: exam.final_theta,
+      standardError: exam.standard_error,
+      totalQuestions: (exam.cat_responses as CATResponse[]).length,
+      responses: exam.cat_responses as CATResponse[]
+    }
+  }
+
+  const itemBank = exam.item_bank as CATQuestion[]
+  const responses = (exam.cat_responses || []) as CATResponse[]
+  const answeredIndices = new Set(responses.map(r => r.bank_index))
+
+  // Current theta from last response, or initial
+  const currentTheta = responses.length > 0
+    ? responses[responses.length - 1].theta_after
+    : exam.initial_theta || 0.0
+
+  // Check convergence
+  const answeredDifficulties = responses.map(r => {
+    const q = itemBank.find(item => item.bank_index === r.bank_index)
+    return q?.difficulty || 0.0
+  })
+  const se = calculateStandardError(currentTheta, answeredDifficulties)
+
+  const hasConverged = responses.length >= CAT_MIN_QUESTIONS && se < CAT_SE_THRESHOLD
+  const maxReached = responses.length >= CAT_MAX_QUESTIONS
+  const bankExhausted = answeredIndices.size >= itemBank.length
+
+  if (hasConverged || maxReached || bankExhausted) {
+    // Mark exam as completed
+    await supabase.from('exams').update({
+      final_theta: currentTheta,
+      standard_error: se,
+      completed_at: new Date().toISOString()
+    }).eq('id', examId)
+
+    // Also update the student's global ability for this subject
+    await supabase.from('student_abilities').upsert({
+      student_id: user.id,
+      subject_id: exam.subject_id,
+      ability_theta: currentTheta,
+      last_updated: new Date().toISOString()
+    }, { onConflict: 'student_id, subject_id' })
+
+    return {
+      finished: true,
+      finalTheta: currentTheta,
+      standardError: se,
+      totalQuestions: responses.length,
+      responses
+    }
+  }
+
+  // Select the next optimal question
+  const nextQuestion = selectNextCATQuestion(currentTheta, itemBank, answeredIndices)
+  if (!nextQuestion) {
+    return { finished: true, finalTheta: currentTheta, standardError: se, totalQuestions: responses.length, responses }
+  }
+
+  return {
+    finished: false,
+    currentTheta,
+    standardError: se,
+    questionNumber: responses.length + 1,
+    question: nextQuestion
+  }
+}
+
+/**
+ * Submit a single answer during a CAT session AND return the next question.
+ * The client passes its full answer history to avoid stale DB reads.
+ */
+export async function submitCATAnswer(
+  examId: string,
+  bankIndex: number,
+  answer: string,
+  previousAnswers: { bank_index: number; answer: string }[]
+) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Unauthorized')
+
+  const { data: exam } = await supabase
+    .from('exams')
+    .select('item_bank, initial_theta, subject_id, completed_at')
+    .eq('id', examId)
+    .eq('student_id', user.id)
+    .single()
+
+  if (!exam || exam.completed_at) throw new Error('Exam not available')
+
+  const itemBank = exam.item_bank as CATQuestion[]
+
+  // Reconstruct full response history from client-provided data (avoids stale DB reads)
+  const allAnswers = [...previousAnswers, { bank_index: bankIndex, answer }]
+  let theta = exam.initial_theta || 0.0
+  const fullResponses: CATResponse[] = []
+
+  for (const a of allAnswers) {
+    const q = itemBank.find(item => item.bank_index === a.bank_index)
+    if (!q) continue
+    const correct = a.answer === q.answer
+    theta = updateAbility(theta, q.difficulty, correct)
+    const difficulties = fullResponses.map(r => itemBank.find(i => i.bank_index === r.bank_index)?.difficulty || 0)
+    difficulties.push(q.difficulty)
+    const se = calculateStandardError(theta, difficulties)
+    fullResponses.push({
+      bank_index: a.bank_index,
+      answer: a.answer,
+      correct,
+      theta_after: theta,
+      se_after: se
+    })
+  }
+
+  const lastResponse = fullResponses[fullResponses.length - 1]
+  const isCorrect = lastResponse.correct
+  const se = lastResponse.se_after
+
+  // Persist the full state to DB
+  await supabase.from('exams').update({
+    cat_responses: fullResponses
+  }).eq('id', examId)
+
+  // ---- Compute the next question ----
+  const answeredIndices = new Set(fullResponses.map(r => r.bank_index))
+  const hasConverged = fullResponses.length >= CAT_MIN_QUESTIONS && se < CAT_SE_THRESHOLD
+  const maxReached = fullResponses.length >= CAT_MAX_QUESTIONS
+  const bankExhausted = answeredIndices.size >= itemBank.length
+
+  let nextResult: any = null
+
+  if (hasConverged || maxReached || bankExhausted) {
+    await supabase.from('exams').update({
+      final_theta: theta,
+      standard_error: se,
+      completed_at: new Date().toISOString()
+    }).eq('id', examId)
+
+    await supabase.from('student_abilities').upsert({
+      student_id: user.id,
+      subject_id: exam.subject_id,
+      ability_theta: theta,
+      last_updated: new Date().toISOString()
+    }, { onConflict: 'student_id, subject_id' })
+
+    nextResult = {
+      finished: true,
+      finalTheta: theta,
+      standardError: se,
+      totalQuestions: fullResponses.length,
+      responses: fullResponses
+    }
+  } else {
+    const nextQuestion = selectNextCATQuestion(theta, itemBank, answeredIndices)
+    if (!nextQuestion) {
+      nextResult = { finished: true, finalTheta: theta, standardError: se, totalQuestions: fullResponses.length, responses: fullResponses }
+    } else {
+      nextResult = {
+        finished: false,
+        currentTheta: theta,
+        standardError: se,
+        questionNumber: fullResponses.length + 1,
+        question: nextQuestion
+      }
+    }
+  }
+
+  return {
+    correct: isCorrect,
+    correctAnswer: itemBank.find(q => q.bank_index === bankIndex)?.answer || '',
+    thetaAfter: theta,
+    seAfter: se,
+    questionNumber: fullResponses.length,
+    next: nextResult
+  }
 }
