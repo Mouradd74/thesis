@@ -55,10 +55,10 @@ export function AdaptiveExamPanel({ examId, initialTheta }: AdaptiveExamPanelPro
         }
         setState('finished')
       } else {
-        setCurrentQuestion(result.question)
-        setQuestionNumber(result.questionNumber)
-        setTheta(result.currentTheta)
-        setStandardError(result.standardError)
+        setCurrentQuestion(result.question || null)
+        setQuestionNumber(result.questionNumber || 0)
+        setTheta(result.currentTheta || 0)
+        setStandardError(result.standardError || 0)
         setSelectedAnswer(null)
         setLastCorrect(null)
         setState('answering')
