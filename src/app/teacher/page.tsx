@@ -82,8 +82,26 @@ export default async function TeacherDashboard() {
   // --- Fetch Recent Activity ---
   // Teacher's subjects are already fetched at the top (`mySubjects`, `subjectIds`)
 
+  type QuizActivity = {
+    type: 'quiz'
+    studentId: string
+    score: number
+    date: string
+    title: string
+  }
+
+  type ExamActivity = {
+    type: 'exam'
+    studentId: string
+    score: null
+    date: string
+    title: string
+  }
+
+  type ActivityItem = QuizActivity | ExamActivity
+
   // 2. Fetch recent quizzes for these subjects
-  let quizAttempts = []
+  let quizAttempts: ActivityItem[] = []
   if (subjectIds.length > 0) {
     const { data: quizzes } = await supabase.from('quizzes').select('id, lesson_title').in('subject_id', subjectIds)
     const quizIds = quizzes?.map(q => q.id) || []
@@ -107,7 +125,7 @@ export default async function TeacherDashboard() {
   }
 
   // 3. Fetch recent exams for these subjects
-  let examAttempts = []
+  let examAttempts: ActivityItem[] = []
   if (subjectIds.length > 0) {
     const { data: exams } = await supabase
       .from('exams')
