@@ -44,9 +44,9 @@ export function AdaptiveExamPanel({ examId, initialTheta }: AdaptiveExamPanelPro
       const result = await getNextCATQuestion(examId)
 
       if (result.finished) {
-        setTheta(result.finalTheta)
-        setStandardError(result.standardError)
-        setTotalQuestions(result.totalQuestions)
+        setTheta(result.finalTheta || 0)
+        setStandardError(result.standardError || 0)
+        setTotalQuestions(result.totalQuestions || 0)
         // Rebuild theta history from responses
         if (result.responses && result.responses.length > 0) {
           setThetaHistory([initialTheta, ...result.responses.map((r: any) => r.theta_after)])
