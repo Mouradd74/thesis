@@ -56,22 +56,8 @@ export default function Home() {
           {/* Line 2 (WITH cursor) */}
           <span className="text-muted-foreground">
             {line2}
-            <span
-              className="inline-block w-[2px] h-[1em] ml-1"
-              style={{
-                background: 'currentColor',
-                animation: 'blink 1s step-start infinite'
-              }}
-            />
+            <span className="cursor" />
           </span>
-
-          {/* Inline animation */}
-          <style jsx>{`
-    @keyframes blink {
-      0%, 49% { opacity: 1; }
-      50%, 100% { opacity: 0; }
-    }
-  `}</style>
 
         </h1>
 
