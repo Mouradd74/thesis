@@ -1,13 +1,14 @@
 import { createClient } from '@/utils/supabase/server'
 import OpenAI from 'openai'
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENROUTER_API_KEY,
-  baseURL: 'https://openrouter.ai/api/v1',
-})
-
 export async function POST(request: Request) {
-  // 1. Authenticate user
+  // 1. Initialise client inside handler so env vars are available at runtime
+  const openai = new OpenAI({
+    apiKey: process.env.OPENROUTER_API_KEY,
+    baseURL: 'https://openrouter.ai/api/v1',
+  })
+
+  // 2. Authenticate user
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {

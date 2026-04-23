@@ -3,10 +3,12 @@
 import { createClient } from '@/utils/supabase/server'
 import OpenAI from 'openai'
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENROUTER_API_KEY,
-  baseURL: 'https://openrouter.ai/api/v1',
-})
+function makeOpenAI() {
+  return new OpenAI({
+    apiKey: process.env.OPENROUTER_API_KEY,
+    baseURL: 'https://openrouter.ai/api/v1',
+  })
+}
 
 export async function analyzeKnowledgeGaps(subjectId: string) {
   const supabase = await createClient()
@@ -53,6 +55,7 @@ Respond with ONLY a number between -3.0 and 3.0.
 
 Question: "${questionText}"`
 
+  const openai = makeOpenAI()
   try {
     const res = await openai.chat.completions.create({
       model: 'openrouter/auto',
@@ -70,6 +73,7 @@ Question: "${questionText}"`
 
 export async function generateTargetedQuestions(subjectId: string, weakConcepts: string[]) {
   if (!process.env.OPENROUTER_API_KEY) return null
+  const openai = makeOpenAI()
 
   const prompt = `Generate exactly 5 multiple-choice questions targeting the following weak concepts:
 ${weakConcepts.join(', ')}

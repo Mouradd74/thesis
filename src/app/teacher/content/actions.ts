@@ -12,9 +12,11 @@ import { updateMastery } from '@/lib/knowledgeTracing'
 import { updateAbility, selectOptimalQuestions, calculateStandardError, selectNextCATQuestion, CAT_SE_THRESHOLD, CAT_MAX_QUESTIONS, CAT_MIN_QUESTIONS, CATQuestion, CATResponse } from '@/lib/irt'
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENROUTER_API_KEY,
+  apiKey: process.env.OPENROUTER_API_KEY ?? 'placeholder',
   baseURL: 'https://openrouter.ai/api/v1',
 })
+
+// Remove the makeOpenAI wrapper — openai is used directly
 
 interface QuizQuestion {
   question: string
