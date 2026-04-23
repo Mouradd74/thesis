@@ -40,8 +40,8 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# ML data and models
+# ML data (large dataset — do not commit)
 ml/data/
-ml/saved_models/
+# ml/saved_models/ is intentionally committed — models are needed for deployment
 __pycache__/
 *.pyc
