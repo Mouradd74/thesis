@@ -53,10 +53,7 @@ export async function WelcomeBannerSuspense() {
       </div>
 
       <div className="flex flex-wrap gap-4 items-center">
-        <div className="shrink-0 flex items-center gap-3 bg-zinc-950/50 p-2 rounded-xl border border-white/5">
-          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Heuristic Profiler</span>
-          <LearningStyleBadge style={profile.predicted_style as any} confidence={profile.confidence} />
-        </div>
+
 
         {mlStyleProfile && mlStyleProfile.predicted_style !== 'undetermined' && (
           <div className="shrink-0 flex items-center gap-3 bg-zinc-950/50 p-2 rounded-xl border border-emerald-500/30">
