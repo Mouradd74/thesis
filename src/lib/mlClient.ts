@@ -4,7 +4,8 @@
  * Calls the Python FastAPI prediction endpoints from Next.js server actions.
  */
 
-const ML_API_URL = process.env.ML_API_URL || 'http://localhost:8000'
+const RAW_URL = process.env.ML_API_URL || 'http://localhost:8000'
+const ML_API_URL = RAW_URL.replace(/\/+$/, '')
 
 interface MasteryPrediction {
   mastery_probabilities: Record<string, number>
@@ -46,7 +47,7 @@ export async function predictMastery(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ student_interactions: interactions }),
-      signal: AbortSignal.timeout(5000), // 5s timeout
+      signal: AbortSignal.timeout(20000), // 5s timeout
     })
 
     if (!res.ok) {
@@ -73,7 +74,7 @@ export async function predictLearningStyle(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ student_id: studentId, interactions }),
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(20000),
     })
 
     if (!res.ok) {
@@ -99,7 +100,7 @@ export async function clusterStudents(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ students_features: studentsFeatures }),
-      signal: AbortSignal.timeout(10000),
+      signal: AbortSignal.timeout(30000),
     })
 
     if (!res.ok) {
