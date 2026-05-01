@@ -16,7 +16,7 @@ Ensure you have the following installed:
 
 ```bash
 # Clone the repo
-git clone https://github.com/<your-username>/thesis.git
+git clone https://github.com/mouradd74/thesis.git
 cd thesis
 
 # Install dependencies

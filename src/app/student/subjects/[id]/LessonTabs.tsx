@@ -2,9 +2,10 @@
 
 import { useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
-import { Disc, FileText, PlayCircle, Video, CheckCircle2, Sparkles } from 'lucide-react'
+import { Disc, FileText, PlayCircle, Video, CheckCircle2, Sparkles, Lock } from 'lucide-react'
 import { QuizPanel } from './QuizPanel'
 import { LessonChat } from './LessonChat'
+import { QuizReadyDialog } from '@/components/ui/QuizReadyDialog'
 import { logInteraction } from '@/app/student/learning-style/actions'
 import { EventType } from '@/lib/naiveBayes'
 import ReactMarkdown from 'react-markdown'
@@ -35,7 +36,19 @@ export function LessonTabs({ subjectId, title, items, quiz, existingAttempt, rec
   // Track if we already logged the open event to avoid spamming
   const [loggedViews, setLoggedViews] = useState<Set<string>>(new Set())
 
+  // Quiz lockdown state
+  const [showQuizConfirm, setShowQuizConfirm] = useState(false)
+  const [quizLocked, setQuizLocked] = useState(false)
+
   function handleTabChange(type: string) {
+    // Intercept quiz tab click with confirmation dialog
+    if (type === 'quiz' && !existingAttempt) {
+      setShowQuizConfirm(true)
+      return
+    }
+    // Block content tabs while quiz is locked
+    if (quizLocked && type !== 'quiz') return
+
     setActiveType(type)
     // Track last viewed content type for bandit reward (not quiz)
     if (type !== 'quiz') {
@@ -43,7 +56,6 @@ export function LessonTabs({ subjectId, title, items, quiz, existingAttempt, rec
     }
     if (type !== 'quiz' && !loggedViews.has(type)) {
       setLoggedViews(prev => new Set(prev).add(type))
-      // It's technically reopening if we come back to it, but for simplicity we log 'content_open_type'
       let eventType: EventType | null = null
       if (type === 'video') eventType = 'content_open_video'
       if (type === 'audio') eventType = 'content_open_audio'
@@ -52,9 +64,22 @@ export function LessonTabs({ subjectId, title, items, quiz, existingAttempt, rec
         logInteraction(subjectId, eventType, type)
       }
     } else if (type !== 'quiz') {
-      // It's a reopen
       logInteraction(subjectId, 'content_reopen', type)
     }
+  }
+
+  function handleQuizConfirm() {
+    setShowQuizConfirm(false)
+    setQuizLocked(true)
+    setActiveType('quiz')
+  }
+
+  function handleQuizCancel() {
+    setShowQuizConfirm(false)
+  }
+
+  function handleQuizSubmitted() {
+    setQuizLocked(false)
   }
 
   function handleAudioPlay() {
@@ -75,7 +100,24 @@ export function LessonTabs({ subjectId, title, items, quiz, existingAttempt, rec
   }
 
   return (
-    <Card className="overflow-hidden bg-zinc-950/40 border-border/50 transition-all shadow-sm">
+    <Card className="overflow-hidden bg-zinc-950/40 border-border/50 transition-all shadow-sm relative">
+      {/* Quiz Ready Confirmation Dialog */}
+      <QuizReadyDialog
+        open={showQuizConfirm}
+        onConfirm={handleQuizConfirm}
+        onCancel={handleQuizCancel}
+      />
+
+      {/* Lockdown Banner */}
+      {quizLocked && (
+        <div className="px-6 py-3 bg-amber-500/10 border-b border-amber-500/20 flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
+          <Lock className="h-4 w-4 text-amber-500 shrink-0" />
+          <p className="text-sm text-amber-500 font-medium">
+            Quiz Mode — Content and AI Tutor are locked until you submit.
+          </p>
+        </div>
+      )}
+
       <div className="border-b border-border/40 bg-zinc-900/20 px-6 py-4">
         <h2 className="text-xl font-semibold tracking-tight">{title}</h2>
         <div className="mt-4 flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
@@ -126,6 +168,9 @@ export function LessonTabs({ subjectId, title, items, quiz, existingAttempt, rec
                 const isRecommended = recommendedType === type && type !== 'quiz'
                 
                 let btnClass = 'px-4 py-1.5 text-sm font-medium rounded-full transition-colors flex items-center gap-2 whitespace-nowrap relative '
+
+                const isContentTab = type !== 'quiz'
+                const isLockedTab = quizLocked && isContentTab
                 let icon = null
 
                 if (type === 'video') {
@@ -148,7 +193,8 @@ export function LessonTabs({ subjectId, title, items, quiz, existingAttempt, rec
                   <button 
                     key={type} 
                     onClick={() => handleTabChange(type)} 
-                    className={btnClass}
+                    disabled={isLockedTab}
+                    className={`${btnClass} ${isLockedTab ? 'opacity-40 cursor-not-allowed' : ''}`}
                   >
                     {isRecommended && (
                       <span className="absolute -top-1 -right-1 flex h-3 w-3">
@@ -160,6 +206,7 @@ export function LessonTabs({ subjectId, title, items, quiz, existingAttempt, rec
                     {label}
                     {isRecommended && <Sparkles className="h-3 w-3 ml-1 text-emerald-400" />}
                     {type === 'quiz' && existingAttempt && <span className="text-[10px] bg-emerald-500/20 px-1.5 py-0.5 rounded text-emerald-500 ml-1">{existingAttempt.score}%</span>}
+                    {isLockedTab && <Lock className="h-3 w-3 ml-1 text-amber-500/60" />}
                   </button>
                 )
               })
@@ -169,7 +216,7 @@ export function LessonTabs({ subjectId, title, items, quiz, existingAttempt, rec
 
       <CardContent className="p-6">
         {activeType === 'quiz' && quiz ? (
-          <QuizPanel subjectId={subjectId} quizId={quiz.id} questions={quiz.questions} existingAttempt={existingAttempt} lastViewedContentType={lastViewedContentType} />
+          <QuizPanel subjectId={subjectId} quizId={quiz.id} questions={quiz.questions} existingAttempt={existingAttempt} lastViewedContentType={lastViewedContentType} onSubmitted={handleQuizSubmitted} />
         ) : (
           <>
             {activeContent?.type === 'video' && activeContent.url && (
@@ -203,8 +250,8 @@ export function LessonTabs({ subjectId, title, items, quiz, existingAttempt, rec
           </>
         )}
 
-        {/* AI Tutor Chat */}
-        {lessonContext && (
+        {/* AI Tutor Chat — hidden when quiz is locked */}
+        {lessonContext && !quizLocked && (
           <div className="mt-6 pt-6 border-t border-border/30">
             <LessonChat lessonContext={lessonContext} lessonTitle={title} />
           </div>

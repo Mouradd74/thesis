@@ -19,6 +19,10 @@ export default async function StudentLayout({ children }: { children: React.Reac
     redirect('/teacher')
   }
 
+  if (!profile?.onboarding_completed) {
+    redirect('/onboarding')
+  }
+
   async function signOut() {
     'use server'
     const supabase = await createClient()

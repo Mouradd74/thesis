@@ -21,9 +21,10 @@ interface QuizPanelProps {
     score: number
     hints_used?: Record<number, number>
   }
+  onSubmitted?: () => void
 }
 
-export function QuizPanel({ subjectId, quizId, questions, existingAttempt, lastViewedContentType }: QuizPanelProps) {
+export function QuizPanel({ subjectId, quizId, questions, existingAttempt, lastViewedContentType, onSubmitted }: QuizPanelProps) {
   const [answers, setAnswers] = useState<Record<number, string>>({})
   const [hintsUsed, setHintsUsed] = useState<Record<number, number>>({})
   const [submitted, setSubmitted] = useState(false)
@@ -101,6 +102,7 @@ export function QuizPanel({ subjectId, quizId, questions, existingAttempt, lastV
       }
 
       setSubmitted(true)
+      onSubmitted?.()
 
       // Bandit Reward: record which content type the student consumed and their quiz score
       if (lastViewedContentType && ['video', 'audio', 'text'].includes(lastViewedContentType)) {

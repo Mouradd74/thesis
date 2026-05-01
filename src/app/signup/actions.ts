@@ -39,5 +39,5 @@ export async function signup(formData: FormData) {
   revalidatePath('/', 'layout')
   
   if (formData.get('role') === 'teacher') return redirect('/teacher')
-  return redirect('/student')
+  return redirect('/onboarding')
 }

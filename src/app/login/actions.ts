@@ -18,9 +18,10 @@ export async function login(formData: FormData) {
     return redirect(`/login?error=${encodeURIComponent(error.message)}`)
   }
 
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', authData.user.id).single()
+  const { data: profile } = await supabase.from('profiles').select('role, onboarding_completed').eq('id', authData.user.id).single()
   
   revalidatePath('/', 'layout')
   if (profile?.role === 'teacher') return redirect('/teacher')
+  if (!profile?.onboarding_completed) return redirect('/onboarding')
   return redirect('/student')
 }
