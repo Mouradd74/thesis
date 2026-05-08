@@ -3,7 +3,7 @@
 import { useTyping } from '@/hooks/useTyping'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
-import { ArrowRight, BookOpen, Layers, Zap } from 'lucide-react'
+import { ArrowRight, BookOpen, Layers, Zap, Play } from 'lucide-react'
 
 export default function Home() {
   const line1 = useTyping("Adaptive learning", 60, 200)
@@ -86,6 +86,13 @@ export default function Home() {
             </Link>
           </Button>
 
+          <Button size="lg" variant="ghost" className="rounded-full px-8 h-12 hover:bg-white/5" asChild>
+            <a href="#onboarding">
+              <Play className="mr-2 h-4 w-4 fill-emerald-500/20 text-emerald-500" />
+              Watch Onboarding
+            </a>
+          </Button>
+
         </div>
       </section>
 
@@ -123,6 +130,56 @@ export default function Home() {
             </p>
           </div>
 
+        </div>
+      </section>
+
+      {/* Onboarding Videos Section */}
+      <section id="onboarding" className="mx-auto max-w-7xl px-6 py-24 sm:py-32 border-t border-border/40 w-full scroll-mt-20">
+        <div className="flex flex-col items-center justify-center mb-16 text-center animate-fade-in opacity-0" style={{ animationDelay: '200ms' }}>
+          <h2 className="text-3xl font-bold tracking-tight sm:text-4xl mb-4 text-foreground">Getting Started</h2>
+          <p className="text-muted-foreground text-lg max-w-2xl">
+            Watch our quick onboarding guides to get the most out of your adaptive learning experience.
+          </p>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-12 animate-fade-in opacity-0" style={{ animationDelay: '400ms' }}>
+          {/* Teacher Onboarding */}
+          <div className="flex flex-col gap-6 p-6 rounded-3xl border border-border/50 bg-zinc-950/50 hover:bg-zinc-900/50 transition-all duration-300 hover:-translate-y-1 shadow-sm hover:shadow-emerald-500/5">
+            <div className="flex flex-col gap-2">
+              <h3 className="text-2xl font-semibold tracking-tight text-foreground">Teacher Onboarding</h3>
+              <p className="text-muted-foreground text-sm leading-relaxed">
+                Learn how to manage students, track progress, and customize curriculum delivery in the teacher portal.
+              </p>
+            </div>
+            <div className="relative w-full aspect-video rounded-2xl overflow-hidden border border-border/50 bg-zinc-900 shadow-inner">
+              <iframe 
+                src="https://www.youtube.com/embed/-2WoCYE7bZk" 
+                title="Teacher Onboarding Video"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                allowFullScreen
+                className="absolute top-0 left-0 w-full h-full"
+              ></iframe>
+            </div>
+          </div>
+
+          {/* Student Onboarding */}
+          <div className="flex flex-col gap-6 p-6 rounded-3xl border border-border/50 bg-zinc-950/50 hover:bg-zinc-900/50 transition-all duration-300 hover:-translate-y-1 shadow-sm hover:shadow-emerald-500/5">
+            <div className="flex flex-col gap-2">
+              <h3 className="text-2xl font-semibold tracking-tight text-foreground">Student Onboarding</h3>
+              <p className="text-muted-foreground text-sm leading-relaxed">
+                Discover how to navigate your assignments, view progress, and adapt learning content to your style.
+              </p>
+            </div>
+            <div className="relative w-full aspect-video rounded-2xl overflow-hidden border border-border/50 bg-zinc-900 shadow-inner">
+              <iframe 
+                src="https://www.youtube.com/embed/Bq2HLpcp5Zk" 
+                title="Student Onboarding Video"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                allowFullScreen
+                className="absolute top-0 left-0 w-full h-full"
+              ></iframe>
+            </div>
+          </div>
         </div>
       </section>
     </main>
