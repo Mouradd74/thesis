@@ -38,7 +38,7 @@ export const QUESTIONS: Question[] = [
     description: 'We use this to personalize your learning path recommendations.',
     type: 'number',
     placeholder: 'Enter your age',
-    min: 18,
+    min: 6,
     max: 100,
   },
   {
