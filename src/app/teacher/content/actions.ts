@@ -228,12 +228,102 @@ export async function ingestYouTubeVideo(formData: FormData) {
   // -------- Transcript --------
   let transcriptText = ''
   let hasTranscript = false
+
+  // Create an uncached fetch to bypass Next.js's default fetch caching.
+  // Next.js patches globalThis.fetch with { cache: 'force-cache' } which causes
+  // YouTube API responses (especially caption track URLs with expiry params) to
+  // go stale, resulting in "transcript not available" errors on repeat calls.
+  const uncachedFetch: typeof globalThis.fetch = (input, init) =>
+    globalThis.fetch(input, { ...init, cache: 'no-store' })
+
+  // Attempt 1: Use youtube-transcript library with uncached fetch
   try {
-    const transcript = await YoutubeTranscript.fetchTranscript(videoId)
+    const transcript = await YoutubeTranscript.fetchTranscript(videoId, { fetch: uncachedFetch })
     transcriptText = transcript.map(t => t.text).join(' ')
-    hasTranscript = true
-  } catch (err) {
-    console.error('Transcript fetch failed:', err)
+    if (transcriptText.trim().length > 0) {
+      hasTranscript = true
+      console.log(`[Transcript] Library success: ${transcriptText.length} chars`)
+    } else {
+      console.warn('[Transcript] Library returned empty transcript, trying fallback...')
+    }
+  } catch (err: any) {
+    console.error('[Transcript] Library failed:', err?.message || err)
+  }
+
+  // Attempt 2: Direct InnerTube API fallback if library failed
+  if (!hasTranscript) {
+    try {
+      console.log('[Transcript] Attempting direct InnerTube API fallback...')
+      const INNERTUBE_URL = 'https://www.youtube.com/youtubei/v1/player?prettyPrint=false'
+      const CLIENT_VERSION = '20.10.38'
+
+      const playerRes = await uncachedFetch(INNERTUBE_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': `com.google.android.youtube/${CLIENT_VERSION} (Linux; U; Android 14)`
+        },
+        body: JSON.stringify({
+          context: { client: { clientName: 'ANDROID', clientVersion: CLIENT_VERSION } },
+          videoId
+        })
+      })
+
+      if (playerRes.ok) {
+        const playerJson = await playerRes.json()
+        const tracks = playerJson?.captions?.playerCaptionsTracklistRenderer?.captionTracks
+        if (Array.isArray(tracks) && tracks.length > 0) {
+          // Prefer English, otherwise take first track
+          const track = tracks.find((t: any) => t.languageCode?.startsWith('en')) || tracks[0]
+          const trackRes = await uncachedFetch(track.baseUrl, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/85.0.4183.83 Safari/537.36' }
+          })
+          const xml = await trackRes.text()
+
+          // Parse srv3 format: <p t="ms" d="ms">text</p>
+          const segments: string[] = []
+          const pRegex = /<p\s+t="\d+"\s+d="\d+"[^>]*>([\s\S]*?)<\/p>/g
+          let match
+          while ((match = pRegex.exec(xml)) !== null) {
+            // Extract text from <s> tags or plain text
+            let text = match[1]
+            const sRegex = /<s[^>]*>([^<]*)<\/s>/g
+            let sMatch
+            let combined = ''
+            while ((sMatch = sRegex.exec(text)) !== null) combined += sMatch[1]
+            if (!combined) combined = text.replace(/<[^>]+>/g, '')
+            combined = combined.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+              .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&apos;/g, "'").trim()
+            if (combined) segments.push(combined)
+          }
+
+          // Fallback: classic format <text start="s" dur="s">text</text>
+          if (segments.length === 0) {
+            const textRegex = /<text start="[^"]*" dur="[^"]*">([^<]*)<\/text>/g
+            while ((match = textRegex.exec(xml)) !== null) {
+              const text = match[1].replace(/&amp;/g, '&').replace(/&lt;/g, '<')
+                .replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").trim()
+              if (text) segments.push(text)
+            }
+          }
+
+          if (segments.length > 0) {
+            transcriptText = segments.join(' ')
+            hasTranscript = true
+            console.log(`[Transcript] InnerTube fallback success: ${segments.length} segments, ${transcriptText.length} chars`)
+          } else {
+            console.warn('[Transcript] InnerTube returned XML but no parseable segments')
+          }
+        } else {
+          console.warn('[Transcript] InnerTube returned no caption tracks for this video')
+        }
+      }
+    } catch (fallbackErr: any) {
+      console.error('[Transcript] InnerTube fallback also failed:', fallbackErr?.message || fallbackErr)
+    }
+  }
+
+  if (!hasTranscript) {
     transcriptText = 'Transcript unavailable for this video.'
   }
 
