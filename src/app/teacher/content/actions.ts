@@ -229,55 +229,69 @@ export async function ingestYouTubeVideo(formData: FormData) {
   let transcriptText = ''
   let hasTranscript = false
 
-  // Create an uncached fetch to bypass Next.js's default fetch caching.
-  // Next.js patches globalThis.fetch with { cache: 'force-cache' } which causes
-  // YouTube API responses (especially caption track URLs with expiry params) to
-  // go stale, resulting in "transcript not available" errors on repeat calls.
+  // Bypass Next.js fetch caching
   const uncachedFetch: typeof globalThis.fetch = (input, init) =>
     globalThis.fetch(input, { ...init, cache: 'no-store' })
 
-  // Attempt 1: Use youtube-transcript library with uncached fetch
+  // Attempt 1: youtube-transcript library (works locally, blocked on cloud)
   try {
     const transcript = await YoutubeTranscript.fetchTranscript(videoId, { fetch: uncachedFetch })
     transcriptText = transcript.map(t => t.text).join(' ')
     if (transcriptText.trim().length > 0) {
       hasTranscript = true
       console.log(`[Transcript] Library success: ${transcriptText.length} chars`)
-    } else {
-      console.warn('[Transcript] Library returned empty transcript, trying edge fallback...')
     }
   } catch (err: any) {
     console.error('[Transcript] Library failed:', err?.message || err)
   }
 
-  // Attempt 2: Supabase Edge Function (runs on Deno Deploy — different IPs than AWS/Vercel)
+  // Attempt 2: Supadata API (production-grade, handles IP rotation)
+  if (!hasTranscript && process.env.SUPADATA_API_KEY) {
+    try {
+      console.log('[Transcript] Attempting Supadata API...')
+      const res = await uncachedFetch(
+        `https://api.supadata.ai/v1/youtube/transcript?videoId=${videoId}&text=true`,
+        { headers: { 'x-api-key': process.env.SUPADATA_API_KEY } }
+      )
+      if (res.ok) {
+        const data = await res.json()
+        // Supadata returns { content: "full text" } when text=true
+        const text = data.content || (Array.isArray(data) ? data.map((s: any) => s.text).join(' ') : '')
+        if (text.trim().length > 0) {
+          transcriptText = text
+          hasTranscript = true
+          console.log(`[Transcript] Supadata success: ${transcriptText.length} chars`)
+        }
+      } else {
+        console.warn('[Transcript] Supadata HTTP error:', res.status)
+      }
+    } catch (e: any) {
+      console.error('[Transcript] Supadata failed:', e?.message || e)
+    }
+  }
+
+  // Attempt 3: Supabase Edge Function (Deno Deploy, works for some videos)
   if (!hasTranscript) {
     try {
-      console.log('[Transcript] Attempting Supabase Edge Function fallback...')
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
       if (supabaseUrl) {
+        console.log('[Transcript] Attempting Supabase Edge Function...')
         const edgeRes = await uncachedFetch(`${supabaseUrl}/functions/v1/youtube-transcript`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ videoId })
         })
-
         if (edgeRes.ok) {
           const data = await edgeRes.json()
           if (data.success && data.text?.trim()) {
             transcriptText = data.text
             hasTranscript = true
-            console.log(`[Transcript] Supabase Edge Function success (${data.method}): ${transcriptText.length} chars`)
-          } else {
-            console.warn('[Transcript] Supabase Edge Function returned no transcript:', data.error)
+            console.log(`[Transcript] Supabase Edge success: ${transcriptText.length} chars`)
           }
-        } else {
-          const errText = await edgeRes.text().catch(() => '')
-          console.warn('[Transcript] Supabase Edge Function HTTP error:', edgeRes.status, errText)
         }
       }
-    } catch (edgeErr: any) {
-      console.error('[Transcript] Supabase Edge Function failed:', edgeErr?.message || edgeErr)
+    } catch (e: any) {
+      console.error('[Transcript] Supabase Edge failed:', e?.message || e)
     }
   }
 
