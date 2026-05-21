@@ -250,35 +250,34 @@ export async function ingestYouTubeVideo(formData: FormData) {
     console.error('[Transcript] Library failed:', err?.message || err)
   }
 
-  // Attempt 2: Edge Function route (runs on Cloudflare's edge network, not AWS)
-  // YouTube blocks AWS Lambda IPs but is less aggressive with Cloudflare edge IPs
+  // Attempt 2: Supabase Edge Function (runs on Deno Deploy — different IPs than AWS/Vercel)
   if (!hasTranscript) {
     try {
-      console.log('[Transcript] Attempting Edge Function fallback...')
-      const baseUrl = process.env.VERCEL_URL
-        ? `https://${process.env.VERCEL_URL}`
-        : process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
+      console.log('[Transcript] Attempting Supabase Edge Function fallback...')
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+      if (supabaseUrl) {
+        const edgeRes = await uncachedFetch(`${supabaseUrl}/functions/v1/youtube-transcript`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ videoId })
+        })
 
-      const edgeRes = await uncachedFetch(`${baseUrl}/api/transcript`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ videoId })
-      })
-
-      if (edgeRes.ok) {
-        const data = await edgeRes.json()
-        if (data.success && data.text?.trim()) {
-          transcriptText = data.text
-          hasTranscript = true
-          console.log(`[Transcript] Edge Function success (${data.method}): ${transcriptText.length} chars`)
+        if (edgeRes.ok) {
+          const data = await edgeRes.json()
+          if (data.success && data.text?.trim()) {
+            transcriptText = data.text
+            hasTranscript = true
+            console.log(`[Transcript] Supabase Edge Function success (${data.method}): ${transcriptText.length} chars`)
+          } else {
+            console.warn('[Transcript] Supabase Edge Function returned no transcript:', data.error)
+          }
         } else {
-          console.warn('[Transcript] Edge Function returned no transcript:', data.error)
+          const errText = await edgeRes.text().catch(() => '')
+          console.warn('[Transcript] Supabase Edge Function HTTP error:', edgeRes.status, errText)
         }
-      } else {
-        console.warn('[Transcript] Edge Function HTTP error:', edgeRes.status)
       }
     } catch (edgeErr: any) {
-      console.error('[Transcript] Edge Function fallback failed:', edgeErr?.message || edgeErr)
+      console.error('[Transcript] Supabase Edge Function failed:', edgeErr?.message || edgeErr)
     }
   }
 
