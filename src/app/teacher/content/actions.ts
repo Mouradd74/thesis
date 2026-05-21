@@ -244,82 +244,41 @@ export async function ingestYouTubeVideo(formData: FormData) {
       hasTranscript = true
       console.log(`[Transcript] Library success: ${transcriptText.length} chars`)
     } else {
-      console.warn('[Transcript] Library returned empty transcript, trying fallback...')
+      console.warn('[Transcript] Library returned empty transcript, trying edge fallback...')
     }
   } catch (err: any) {
     console.error('[Transcript] Library failed:', err?.message || err)
   }
 
-  // Attempt 2: Direct InnerTube API fallback if library failed
+  // Attempt 2: Edge Function route (runs on Cloudflare's edge network, not AWS)
+  // YouTube blocks AWS Lambda IPs but is less aggressive with Cloudflare edge IPs
   if (!hasTranscript) {
     try {
-      console.log('[Transcript] Attempting direct InnerTube API fallback...')
-      const INNERTUBE_URL = 'https://www.youtube.com/youtubei/v1/player?prettyPrint=false'
-      const CLIENT_VERSION = '20.10.38'
+      console.log('[Transcript] Attempting Edge Function fallback...')
+      const baseUrl = process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}`
+        : process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
 
-      const playerRes = await uncachedFetch(INNERTUBE_URL, {
+      const edgeRes = await uncachedFetch(`${baseUrl}/api/transcript`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'User-Agent': `com.google.android.youtube/${CLIENT_VERSION} (Linux; U; Android 14)`
-        },
-        body: JSON.stringify({
-          context: { client: { clientName: 'ANDROID', clientVersion: CLIENT_VERSION } },
-          videoId
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ videoId })
       })
 
-      if (playerRes.ok) {
-        const playerJson = await playerRes.json()
-        const tracks = playerJson?.captions?.playerCaptionsTracklistRenderer?.captionTracks
-        if (Array.isArray(tracks) && tracks.length > 0) {
-          // Prefer English, otherwise take first track
-          const track = tracks.find((t: any) => t.languageCode?.startsWith('en')) || tracks[0]
-          const trackRes = await uncachedFetch(track.baseUrl, {
-            headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/85.0.4183.83 Safari/537.36' }
-          })
-          const xml = await trackRes.text()
-
-          // Parse srv3 format: <p t="ms" d="ms">text</p>
-          const segments: string[] = []
-          const pRegex = /<p\s+t="\d+"\s+d="\d+"[^>]*>([\s\S]*?)<\/p>/g
-          let match
-          while ((match = pRegex.exec(xml)) !== null) {
-            // Extract text from <s> tags or plain text
-            let text = match[1]
-            const sRegex = /<s[^>]*>([^<]*)<\/s>/g
-            let sMatch
-            let combined = ''
-            while ((sMatch = sRegex.exec(text)) !== null) combined += sMatch[1]
-            if (!combined) combined = text.replace(/<[^>]+>/g, '')
-            combined = combined.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
-              .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&apos;/g, "'").trim()
-            if (combined) segments.push(combined)
-          }
-
-          // Fallback: classic format <text start="s" dur="s">text</text>
-          if (segments.length === 0) {
-            const textRegex = /<text start="[^"]*" dur="[^"]*">([^<]*)<\/text>/g
-            while ((match = textRegex.exec(xml)) !== null) {
-              const text = match[1].replace(/&amp;/g, '&').replace(/&lt;/g, '<')
-                .replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").trim()
-              if (text) segments.push(text)
-            }
-          }
-
-          if (segments.length > 0) {
-            transcriptText = segments.join(' ')
-            hasTranscript = true
-            console.log(`[Transcript] InnerTube fallback success: ${segments.length} segments, ${transcriptText.length} chars`)
-          } else {
-            console.warn('[Transcript] InnerTube returned XML but no parseable segments')
-          }
+      if (edgeRes.ok) {
+        const data = await edgeRes.json()
+        if (data.success && data.text?.trim()) {
+          transcriptText = data.text
+          hasTranscript = true
+          console.log(`[Transcript] Edge Function success (${data.method}): ${transcriptText.length} chars`)
         } else {
-          console.warn('[Transcript] InnerTube returned no caption tracks for this video')
+          console.warn('[Transcript] Edge Function returned no transcript:', data.error)
         }
+      } else {
+        console.warn('[Transcript] Edge Function HTTP error:', edgeRes.status)
       }
-    } catch (fallbackErr: any) {
-      console.error('[Transcript] InnerTube fallback also failed:', fallbackErr?.message || fallbackErr)
+    } catch (edgeErr: any) {
+      console.error('[Transcript] Edge Function fallback failed:', edgeErr?.message || edgeErr)
     }
   }
 
