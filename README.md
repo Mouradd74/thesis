@@ -660,3 +660,7 @@ This project is part of an academic thesis and is not currently licensed for com
 - **OpenRouter** — LLM routing for study guide and quiz generation
 - **Supabase** — Backend-as-a-Service powering authentication, database, and storage
 - **Next.js** — React framework for the full-stack web application
+- **OpenAI** — API for natural language processing and generation
+- **youtube-transcript** — Extracts YouTube video transcripts for study guide generation
+- **msedge-tts** — Neural text-to-speech for audio narration of study guides
+- **FastAPI** — Python microservice framework for serving ML models
