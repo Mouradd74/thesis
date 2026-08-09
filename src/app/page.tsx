@@ -7,7 +7,7 @@ import { ArrowRight, BookOpen, Layers, Zap, Play } from 'lucide-react'
 
 export default function Home() {
   const line1 = useTyping("Adaptive learning", 60, 200)
-  const line2 = useTyping("reimagined.", 60, 1800)
+  const line2 = useTyping("reimagined", 60, 1800)
 
   return (
     <main className="flex min-h-screen flex-col items-center selection:bg-primary/20">
